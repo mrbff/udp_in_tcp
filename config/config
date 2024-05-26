@@ -1,0 +1,11 @@
+C1_ip=
+C1_port=
+G1_ip=127.0.0.1
+G1_port=9999
+G2_ip=127.0.0.1
+G2_port=7777
+C2_ip=127.0.0.1
+C2_port=8888
+
+#comment the followig line to set TCP tunnel off
+TUNNEL_ON
