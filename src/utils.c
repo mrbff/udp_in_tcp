@@ -58,7 +58,7 @@ int get_config(t_config * config) {
             strncpy(config->G2_ip, value, sizeof(config->G2_ip));
         } else if (!strcmp(key, "G2_port") && value) {
             config->G2_port = atoi(value);
-        } else if (!strcmp(key, "TUNNEL_ON")) {
+        } else if (!strcmp(key, "TUNNEL_ON") || !strcmp(key, "TUNNEL_ON\n")) {
             config->TUNNEL_ON = 1;
         }
     }
