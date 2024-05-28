@@ -2,16 +2,17 @@
 
 t_node	*node_create(char *data, int size)
 {
-    if (size < 0)
+    if (size <= 0)
         return (NULL);
 
-    t_node *newNode = NULL;
-
-    newNode = malloc(sizeof(t_node));
-    if (!newNode)
+    t_node *newNode = malloc(sizeof(t_node));
+    if (!newNode) {
+        perror("malloc error");
         return (NULL);
+    }
     newNode->data = malloc(size);
-    if (size && !newNode->data) {
+    if (!newNode->data) {
+        perror("malloc error");
         free(newNode);
         return (NULL);
     }
@@ -24,8 +25,10 @@ t_node	*node_create(char *data, int size)
 
 void insert_ordered(t_node **head, char *data, int size) {
     t_node *newNode = node_create(data, size);
-    if (!newNode)
-        return ;
+    if (!newNode) {
+        perror("packet not stored, malloc error");
+        return;
+    }
 
     if (*head == NULL || (*head)->size > size) {
         newNode->next = *head;

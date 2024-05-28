@@ -1,26 +1,45 @@
 #include "../includes/udp_in_tcp.h"
 
-static int sock = -1;
-static struct sockaddr_in * g1_addr;
+int sock = -1;
+struct sockaddr_in * g1_addr = NULL;
+EVP_PKEY *rsa = NULL;
+EVP_PKEY_CTX *pctx = NULL;
+unsigned char *pub_key = NULL;
+EVP_PKEY_CTX *ctx = NULL;
+unsigned char *symmetric_key = NULL;
 
-static void handle_client_sigint(int sig) {
-    printf("\nGood Bye!\n");
+void clear() {
     if (g1_addr != NULL)
         free(g1_addr);
     if (sock >= 0)
         close(sock);
-    exit(0);
+    if (rsa != NULL)
+        EVP_PKEY_free(rsa);
+    if (pctx != NULL)
+        EVP_PKEY_CTX_free(pctx);
+    if (pub_key != NULL)
+        OPENSSL_free(pub_key);
+    if (ctx != NULL)
+        EVP_PKEY_CTX_free(ctx);
+    if (symmetric_key != NULL)
+        OPENSSL_free(symmetric_key);
+    ERR_free_strings();
+    EVP_cleanup();
 }
 
 int main() {
-    signal(SIGINT, handle_client_sigint);
+    signal(SIGINT, handle_sigint);
+    OpenSSL_add_all_algorithms();
+    ERR_load_crypto_strings();
 
-    unsigned char packet[1024];
-    unsigned char key[KEY_SIZE] = "X29aaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    unsigned char hmac[HMAC_SIZE];
-    unsigned char send_buffer[1024 + HMAC_SIZE];
+    unsigned char packet[PACKET_MAX_LEN] = "";
+    unsigned char encrypted_packet[PACKET_MAX_LEN + AES_BLOCK_SIZE] = "";
+    unsigned char hmac[HMAC_SIZE] = "";
+    unsigned char send_buffer[HMAC_SIZE + IV_SIZE + PACKET_MAX_LEN + AES_BLOCK_SIZE] = "";
     unsigned int hmac_len;
     t_config config;
+    int true = 1;
+    unsigned char iv[IV_SIZE] = "";
 
     if (get_config(&config) < 0) {
         perror("config file");
@@ -32,26 +51,54 @@ int main() {
         perror("socket");
         exit(EXIT_FAILURE);
     }
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &true, sizeof(int)) < 0) {
+        perror("setsockopt");
+        close(sock);
+        exit(EXIT_FAILURE);
+    }
 
     if (config.TUNNEL_ON)
         g1_addr = createIPv4Address(config.G1_ip, config.G1_port);
     else
         g1_addr = createIPv4Address(config.C2_ip, config.C2_port);
 
-    while (1) {
-        int packet_length = rand() % 1024 + 1;
-        generate_random_packet((char *)packet, packet_length);
-
-        HMAC(EVP_sha256(), key, KEY_SIZE, packet, packet_length, hmac, &hmac_len);
-
-        memcpy(send_buffer, hmac, HMAC_SIZE);
-        memcpy(send_buffer + HMAC_SIZE, packet, packet_length);
-
-        sendto(sock, send_buffer, HMAC_SIZE + packet_length, 0, (struct sockaddr *)g1_addr, sizeof(struct sockaddr_in));
-        printf("Sent packet of length %d\n", packet_length);
-        sleep(DELAY);
+    if (!g1_addr) {
+        perror("address");
+        close(sock);
+        exit(EXIT_FAILURE);
     }
 
-    close(sock);
-    return 0;
+    puts("Generating keys...");
+    rsa = generate_rsa_key();
+    puts("Serializing public key");
+    int pub_key_len = i2d_PUBKEY(rsa, &pub_key);
+    puts("Sending public key to server");
+    sendto(sock, pub_key, pub_key_len, 0, (struct sockaddr *)g1_addr, sizeof(struct sockaddr_in));
+
+    unsigned char encrypted_key[ENCRYPTED_KEY_SIZE];
+    puts("Waiting for encryption key...");
+    recvfrom(sock, encrypted_key, ENCRYPTED_KEY_SIZE, 0, NULL, NULL);
+    puts("Received encryption key from server");
+
+    symmetric_key = rsa_decrypt(rsa, encrypted_key, ENCRYPTED_KEY_SIZE);
+
+    puts("Starting sending packets...\n");
+    int packet_length = 0;
+    int enc_packet_length;
+    while (1) {
+        generate_random_packet(packet, &packet_length);
+
+        HMAC(EVP_sha256(), symmetric_key, SYMMETRIC_KEY_SIZE, packet, packet_length, hmac, &hmac_len);
+        memcpy(send_buffer, hmac, HMAC_SIZE);
+
+        enc_packet_length = encrypt_packet(packet, packet_length, symmetric_key, iv, encrypted_packet);
+        memcpy(send_buffer + HMAC_SIZE, iv, IV_SIZE);
+        memcpy(send_buffer + HMAC_SIZE + IV_SIZE, encrypted_packet, enc_packet_length);
+
+        sendto(sock, send_buffer, HMAC_SIZE + IV_SIZE + enc_packet_length, 0, (struct sockaddr *)g1_addr, sizeof(struct sockaddr_in));
+        printf("Sent packet of length %d\n", packet_length);
+        memset(packet, 0, sizeof(packet));
+        memset(encrypted_packet, 0, sizeof(encrypted_packet));
+        usleep(DELAY);
+    }
 }

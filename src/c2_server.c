@@ -1,31 +1,44 @@
 #include "../includes/udp_in_tcp.h"
 
-static int sock = -1;
-static t_node *head = NULL;
-static struct sockaddr_in * server_addr;
+int sock = -1;
+t_node *head = NULL;
+struct sockaddr_in * server_addr = NULL;
+unsigned char * symmetric_key = NULL;
+unsigned char *encrypted_key = NULL;
+EVP_PKEY *client_pkey = NULL;
 
-static void handle_server_sigint(int sign) {
-    printf("\nGood Bye!\n");
+void clear() {
     if (server_addr != NULL)
         free(server_addr);
     clear_list(&head);
     if (sock >= 0)
         close(sock);
-    exit(0);
+    if (symmetric_key != NULL)
+        OPENSSL_free(symmetric_key);
+    if (encrypted_key != NULL)
+        OPENSSL_free(encrypted_key);
+    if (client_pkey != NULL)
+        EVP_PKEY_free(client_pkey);
+    ERR_free_strings();
+    EVP_cleanup();
 }
 
 int main() {
-    signal(SIGINT, handle_server_sigint);
+    signal(SIGINT, handle_sigint);
+    OpenSSL_add_all_algorithms();
+    ERR_load_crypto_strings();
 
     struct sockaddr_in client_addr;
-    unsigned char key[KEY_SIZE] = "X29aaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    unsigned char buffer[1024 + HMAC_SIZE];
-    unsigned char packet[1024];
-    unsigned char received_hmac[HMAC_SIZE];
-    unsigned char calculated_hmac[HMAC_SIZE];
+    unsigned char buffer[ HMAC_SIZE + IV_SIZE + PACKET_MAX_LEN + AES_BLOCK_SIZE] = "";
+    unsigned char packet[PACKET_MAX_LEN] = "";
+    unsigned char encrypted_packet[PACKET_MAX_LEN + AES_BLOCK_SIZE] = "";
+    unsigned char received_hmac[HMAC_SIZE] = "";
+    unsigned char calculated_hmac[HMAC_SIZE] = "";
     socklen_t addr_len = sizeof(client_addr);
     unsigned int hmac_len;
     t_config config;
+    int true = 1;
+    unsigned char iv[IV_SIZE] = "";
 
     if (get_config(&config) < 0) {
         perror("config file");
@@ -37,35 +50,72 @@ int main() {
         perror("socket");
         exit(EXIT_FAILURE);
     }
-
-    server_addr = createIPv4Address("", config.C2_port);
-
-    if (bind(sock, (struct sockaddr *)server_addr, sizeof(struct sockaddr_in)) < 0) {
-        perror("bind");
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &true, sizeof(int)) < 0) {
+        perror("setsockopt");
         close(sock);
         exit(EXIT_FAILURE);
     }
 
+    server_addr = createIPv4Address("", config.C2_port);
+    if (!server_addr) {
+        perror("address");
+        close(sock);
+        exit(EXIT_FAILURE);
+    }
+
+    if (bind(sock, (struct sockaddr *)server_addr, sizeof(struct sockaddr_in)) < 0) {
+        perror("bind");
+        close(sock);
+        free(server_addr);
+        exit(EXIT_FAILURE);
+    }
+
+    symmetric_key = generate_symmetric_key();
+    puts("Symmetric key generated");
+    unsigned char client_pub_key[DER_LEN];
+    puts("Waiting for client public key");
+    int client_pub_key_len = recvfrom(sock, client_pub_key, sizeof(client_pub_key), 0, (struct sockaddr *)&client_addr, &addr_len);
+    puts("Public key received from client");
+    const unsigned char *p = client_pub_key;
+    puts("Deserializing client public key");
+    client_pkey = d2i_PUBKEY(NULL, &p, client_pub_key_len);
+    if (!client_pkey) handle_errors();
+
+    int encrypted_len;
+    encrypted_key = rsa_encrypt(client_pkey, symmetric_key, SYMMETRIC_KEY_SIZE, &encrypted_len);
+    puts("Symmetric key encrypted");
+
+    puts("Sending encrypted key to client");
+    sendto(sock, encrypted_key, encrypted_len, 0, (struct sockaddr *)&client_addr, addr_len);
+    OPENSSL_free(encrypted_key);
+    encrypted_key = NULL;
+    EVP_PKEY_free(client_pkey);
+    client_pkey = NULL;
+
+    puts("Waiting to receive packets...\n\n");
+    int packet_length = 0;
+    int enc_packet_length = 0;
     while (1) {
         int recv_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &addr_len);
         if (recv_len > 0) {
             memcpy(received_hmac, buffer, HMAC_SIZE);
-            int packet_length = recv_len - HMAC_SIZE;
-            memcpy(packet, buffer + HMAC_SIZE, packet_length);
+            memcpy(iv, buffer + HMAC_SIZE, IV_SIZE);
+            enc_packet_length = recv_len - HMAC_SIZE - IV_SIZE;
+            memcpy(encrypted_packet, buffer + HMAC_SIZE + IV_SIZE, enc_packet_length);
 
-            HMAC(EVP_sha256(), key, KEY_SIZE, packet, packet_length, calculated_hmac, &hmac_len);
+            packet_length = decrypt_packet(encrypted_packet, enc_packet_length, symmetric_key, iv, packet);
+            HMAC(EVP_sha256(), symmetric_key, SYMMETRIC_KEY_SIZE, packet, packet_length, calculated_hmac, &hmac_len);
 
             if (CRYPTO_memcmp(received_hmac, calculated_hmac, HMAC_SIZE) == 0) {
                 printf("Received packet of size %d with valid authentication\n", packet_length);
                 insert_ordered(&head, (char *)packet, packet_length);
                 display_list_sizes(head);
-                printf("\n\n");
+                printf("\n");
             } else {
                 printf("Received packet with invalid HMAC. Dropping packet.\n");
             }
         }
+        memset(packet, 0, sizeof(packet));
+        memset(encrypted_packet, 0, sizeof(encrypted_packet));
     }
-
-    close(sock);
-    return 0;
 }

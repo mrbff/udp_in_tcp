@@ -1,0 +1,52 @@
+BUILD
+-----
+type 'make' to compile and build all 4 components ['c1_client', 'c2_server', 'g1_utot', 'g2_ttou']
+type 'make component_name' to build just 1 component
+type 'make clean' to remove obj files (.o) after compiling
+type 'make fclean' to remove obj files and binaries
+type 'make re' to fclean and rebuild all the components
+
+
+USAGE
+-----
+To execute a component just build it and then launch it with './component_name'.
+The communication is unidirectional from C1 to C2 and is designed as follows:
+
+    UDP      TCP      UDP
+C1 ----> G1 ----> G2 ----> C2
+
+Every node should have at least the IpV4 address, the host port of the next hop
+and the port from which to listen to incoming connections.
+This data can be edited in the 'config' file in the 'config/' directory.
+
+If you want C1 to communicate directly to C2 through UDP,
+
+    UDP
+C1 ----> C2
+
+just comment with an '#' or remove the line 'TUNNEL_ON' from the config file.
+
+If 2 or more components are on the same machine use '127.0.0.1' as Ip address of the next hop.
+If you want to test the 4 components in the same machine,just set all the Ip addresses to
+'127.0.0.1' and launch in order C2, G2, G1, C1 in 4 different terminals.
+
+
+EXAMPLE
+-------
+C1 and G1 in machine A communicate through TCP to G2 and C2 on machine B.
+
+ 192.168.1.194      TCP       192.168.1.248
+[C1    ->   G1]  --------->  [G2    ->   C2]
+       A                            B
+
+In this case the configs file will be something like:
+-----------------------------------------------
+config A:               config B:
+[...]                   [...]
+G1_ip=127.0.0.1         g2_port=7777
+G1_port=9999            C2_ip=127.0.0.1
+G2_ip=192.168.1.248     C2_port=8888
+G2_port=7777            [...]
+[...]
+TUNNEL_ON
+-----------------------------------------------

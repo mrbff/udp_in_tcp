@@ -35,11 +35,11 @@ G1_OBJS			:=	$(G1_SRCS:.c=.o)
 G2_OBJS         :=  $(G2_SRCS:.c=.o)
 
 .c.o:
-	${CC} ${FLAGS} -c $< -o ${<:.c=.o} -lcrypto
+	@${CC} ${FLAGS} -c $< -o ${<:.c=.o} -lssl -lcrypto
 
 CC			:=	gcc
 
-FLAGS			:=	-Wall -Wextra -g
+FLAGS			:=	-Wall -Wextra -Werror -g
 
 CLR_RMV         := \033[0m
 RED                 := \033[1;31m
@@ -54,22 +54,22 @@ $(NAME):		$(C1_NAME) $(C2_NAME) $(G1_NAME) $(G2_NAME)
 
 $(C1_NAME):		$(C1_OBJS)
 			@echo "$(GREEN)Compilation ${CLR_RMV}of ${YELLOW}$(C1_NAME) ${CLR_RMV}..."
-			@$(CC) $(FLAGS) $(C1_OBJS) -o $(C1_NAME) -lcrypto
+			@$(CC) $(FLAGS) $(C1_OBJS) -o $(C1_NAME) -lssl -lcrypto
 			@echo "$(GREEN)$(C1_NAME) created ✔️ ${CLR_RMV}"
 
 $(C2_NAME):		$(C2_OBJS)
 			@echo "$(GREEN)Compilation ${CLR_RMV}of ${YELLOW}$(C2_NAME) ${CLR_RMV}..."
-			@$(CC) $(FLAGS) $(C2_OBJS) -o $(C2_NAME) -lcrypto
+			@$(CC) $(FLAGS) $(C2_OBJS) -o $(C2_NAME) -lssl -lcrypto
 			@echo "$(GREEN)$(C2_NAME) created ✔️ ${CLR_RMV}"
 
 $(G1_NAME):		$(G1_OBJS)
 			@echo "$(GREEN)Compilation ${CLR_RMV}of ${YELLOW}$(G1_NAME) ${CLR_RMV}..."
-			@$(CC) $(FLAGS) $(G1_OBJS) -o $(G1_NAME) -lcrypto
+			@$(CC) $(FLAGS) $(G1_OBJS) -o $(G1_NAME) -lssl -lcrypto
 			@echo "$(GREEN)$(G1_NAME) created ✔️ ${CLR_RMV}"
 
 $(G2_NAME):		$(G2_OBJS)
 			@echo "$(GREEN)Compilation ${CLR_RMV}of ${YELLOW}$(G2_NAME) ${CLR_RMV}..."
-			@$(CC) $(FLAGS) $(G2_OBJS) -o $(G2_NAME) -lcrypto
+			@$(CC) $(FLAGS) $(G2_OBJS) -o $(G2_NAME) -lssl -lcrypto
 			@echo "$(GREEN)$(G2_NAME) created ✔️ ${CLR_RMV}"
 
 all:			$(NAME)

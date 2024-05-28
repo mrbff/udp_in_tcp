@@ -1,13 +1,12 @@
 #include "../includes/udp_in_tcp.h"
 
-static int tcp_sock = -1;
-static int new_sock = -1;
-static int udp_sock = -1;
-static struct sockaddr_in * g2_addr;
-static struct sockaddr_in * c2_addr;
+int tcp_sock = -1;
+int new_sock = -1;
+int udp_sock = -1;
+struct sockaddr_in * g2_addr = NULL;
+struct sockaddr_in * c2_addr = NULL;
 
-static void handle_g2_sigint(int sig) {
-    printf("\nGood Bye!\n");
+void clear() {
     if (g2_addr != NULL)
         free(g2_addr);
     if (c2_addr != NULL)
@@ -18,15 +17,15 @@ static void handle_g2_sigint(int sig) {
         close(tcp_sock);
     if (new_sock >= 0)
         close(new_sock);
-    exit(0);
 }
 
 int main() {
-    signal(SIGINT, handle_g2_sigint);
+    signal(SIGINT, handle_sigint);
 
-    char buffer[1024 + 32];
+    char buffer[HMAC_SIZE + IV_SIZE + PACKET_MAX_LEN + AES_BLOCK_SIZE] = "";
     socklen_t addr_len = sizeof(struct sockaddr_in);
     t_config config;
+    int true = 1;
 
     if (get_config(&config) < 0) {
         perror("config file");
@@ -38,18 +37,30 @@ int main() {
         perror("TCP socket");
         exit(EXIT_FAILURE);
     }
+    if (setsockopt(tcp_sock, SOL_SOCKET, SO_REUSEADDR, &true, sizeof(int)) < 0) {
+        perror("TCP setsockopt");
+        close(tcp_sock);
+        exit(EXIT_FAILURE);
+    }
 
     g2_addr = createIPv4Address("", config.G2_port);
+    if (!g2_addr) {
+        perror("address");
+        close(tcp_sock);
+        exit(EXIT_FAILURE);
+    }
 
     if (bind(tcp_sock, (struct sockaddr *)g2_addr, sizeof(struct sockaddr_in)) < 0) {
         perror("TCP bind");
         close(tcp_sock);
+        free(g2_addr);
         exit(EXIT_FAILURE);
     }
 
     if (listen(tcp_sock, 5) < 0) {
         perror("TCP listen");
         close(tcp_sock);
+        free(g2_addr);
         exit(EXIT_FAILURE);
     }
 
@@ -57,6 +68,7 @@ int main() {
     if (new_sock < 0) {
         perror("TCP accept");
         close(tcp_sock);
+        free(g2_addr);
         exit(EXIT_FAILURE);
     }
 
@@ -65,21 +77,45 @@ int main() {
         perror("UDP socket");
         close(tcp_sock);
         close(new_sock);
+        free(g2_addr);
+        exit(EXIT_FAILURE);
+    }
+    if (setsockopt(udp_sock, SOL_SOCKET, SO_REUSEADDR, &true, sizeof(int)) < 0) {
+        perror("UDP setsockopt");
+        close(tcp_sock);
+        close(new_sock);
+        close(udp_sock);
+        free(g2_addr);
         exit(EXIT_FAILURE);
     }
 
     c2_addr = createIPv4Address(config.C2_ip, config.C2_port);
+    if (!c2_addr) {
+        perror("address");
+        close(tcp_sock);
+        close(new_sock);
+        close(udp_sock);
+        free(g2_addr);
+        exit(EXIT_FAILURE);
+    }
+
+    int recv_len = recv(new_sock, buffer, sizeof(buffer), 0);
+    if (recv_len > 0) {
+        sendto(udp_sock, buffer, recv_len, 0, (struct sockaddr *)c2_addr, sizeof(struct sockaddr_in));
+        puts("Client public key forwarded to server");
+    }
+
+    recv_len = recvfrom(udp_sock, buffer, sizeof(buffer), 0, NULL, NULL);
+    if (recv_len > 0) {
+        send(new_sock, buffer, sizeof(buffer), 0);
+        puts("Forwarding encrypted key from server through tunnel\n");
+    }
 
     while (1) {
-        int recv_len = recv(new_sock, buffer, sizeof(buffer), 0);
+        recv_len = recv(new_sock, buffer, sizeof(buffer), 0);
         if (recv_len > 0) {
             sendto(udp_sock, buffer, recv_len, 0, (struct sockaddr *)c2_addr, sizeof(struct sockaddr_in));
             printf("Forwarded packet of size %d from TCP to UDP\n", recv_len);
         }
     }
-
-    close(tcp_sock);
-    close(new_sock);
-    close(udp_sock);
-    return 0;
 }
