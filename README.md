@@ -1,10 +1,5 @@
 # udp-in-tcp
-Repository privato dedicato all'assignment
 
-## Istruzioni
-
-L'assignment consiste nell'implementazione delle necessarie componenti
-software che seguano le seguenti indicazioni:
 - un client UDP C1 deve mandare pacchetti di lunghezza e contenuto casuale
   ad un server UDP C2;
 - C2 verifica che il contenuto dei pacchetti non sia corrotto mediante
