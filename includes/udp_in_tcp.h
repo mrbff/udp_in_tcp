@@ -14,6 +14,8 @@
 #include <openssl/err.h>
 #include <openssl/aes.h>
 
+#define _XOPEN_SOURCE 700
+#define _GNU_SOURCE
 #define SYMMETRIC_KEY_SIZE 32
 #define HMAC_SIZE 32  // HMAC-SHA256 output size
 #define DELAY 500000 // microseconds
@@ -23,6 +25,8 @@
 #define DER_LEN 294
 #define ENCRYPTED_KEY_SIZE 256
 #define IV_SIZE AES_BLOCK_SIZE
+
+struct sigaction old_action;
 
 void                    generate_random_packet(unsigned char *packet, int *length);
 struct sockaddr_in *    createIPv4Address(char * ip, int port);

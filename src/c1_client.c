@@ -28,7 +28,9 @@ void clear() {
 }
 
 int main() {
-    signal(SIGINT, handle_sigint);
+    struct sigaction action = { 0 };
+    action.sa_handler = &handle_sigint;
+    sigaction(SIGINT, &action, &old_action);
     OpenSSL_add_all_algorithms();
     ERR_load_crypto_strings();
 
@@ -43,17 +45,19 @@ int main() {
 
     if (get_config(&config) < 0) {
         perror("config file");
+        clear();
         exit(EXIT_FAILURE);
     }
 
     sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
         perror("socket");
+        clear();
         exit(EXIT_FAILURE);
     }
     if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &true, sizeof(int)) < 0) {
         perror("setsockopt");
-        close(sock);
+        clear();
         exit(EXIT_FAILURE);
     }
 
@@ -64,7 +68,7 @@ int main() {
 
     if (!g1_addr) {
         perror("address");
-        close(sock);
+        clear();
         exit(EXIT_FAILURE);
     }
 
@@ -102,3 +106,30 @@ int main() {
         usleep(DELAY);
     }
 }
+/*void
+       handler(int signo, siginfo_t *info, void *context)
+       {
+           struct sigaction oldact;
+
+           if (sigaction(SIGSEGV, NULL, &oldact) == -1
+               || (oldact.sa_flags & SA_UNSUPPORTED)
+               || !(oldact.sa_flags & SA_EXPOSE_TAGBITS))
+           {
+               _exit(EXIT_FAILURE);
+           }
+           _exit(EXIT_SUCCESS);
+       }
+
+       int
+       main(void)
+       {
+           struct sigaction act = { 0 };
+
+           act.sa_sigaction = &handler;
+           if (sigaction(SIGSEGV, &act, NULL) == -1) {
+               perror("sigaction");
+               exit(EXIT_FAILURE);
+           }
+
+           raise(SIGSEGV);
+       }*/

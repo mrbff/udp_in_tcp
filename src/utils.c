@@ -69,8 +69,10 @@ int get_config(t_config * config) {
     return (0);
 }
 
-void handle_sigint(int sig) {
+void handle_sigint(int sig)
+{
     printf("\nGood Bye!\n");
+    sigaction(SIGINT, &old_action, NULL);
     (void)sig;
     clear();
     exit(0);

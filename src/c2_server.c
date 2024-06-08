@@ -52,21 +52,20 @@ int main() {
     }
     if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &true, sizeof(int)) < 0) {
         perror("setsockopt");
-        close(sock);
+        clear();
         exit(EXIT_FAILURE);
     }
 
     server_addr = createIPv4Address("", config.C2_port);
     if (!server_addr) {
         perror("address");
-        close(sock);
+        clear();
         exit(EXIT_FAILURE);
     }
 
     if (bind(sock, (struct sockaddr *)server_addr, sizeof(struct sockaddr_in)) < 0) {
         perror("bind");
-        close(sock);
-        free(server_addr);
+        clear();
         exit(EXIT_FAILURE);
     }
 

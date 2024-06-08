@@ -39,63 +39,52 @@ int main() {
     }
     if (setsockopt(tcp_sock, SOL_SOCKET, SO_REUSEADDR, &true, sizeof(int)) < 0) {
         perror("TCP setsockopt");
-        close(tcp_sock);
+        clear();
         exit(EXIT_FAILURE);
     }
 
     g2_addr = createIPv4Address("", config.G2_port);
     if (!g2_addr) {
         perror("address");
-        close(tcp_sock);
+        clear();
         exit(EXIT_FAILURE);
     }
 
     if (bind(tcp_sock, (struct sockaddr *)g2_addr, sizeof(struct sockaddr_in)) < 0) {
         perror("TCP bind");
-        close(tcp_sock);
-        free(g2_addr);
+        clear();
         exit(EXIT_FAILURE);
     }
 
     if (listen(tcp_sock, 5) < 0) {
         perror("TCP listen");
-        close(tcp_sock);
-        free(g2_addr);
+        clear();
         exit(EXIT_FAILURE);
     }
 
     new_sock = accept(tcp_sock, (struct sockaddr *)g2_addr, &addr_len);
     if (new_sock < 0) {
         perror("TCP accept");
-        close(tcp_sock);
-        free(g2_addr);
+        clear();
         exit(EXIT_FAILURE);
     }
 
     udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (udp_sock < 0) {
         perror("UDP socket");
-        close(tcp_sock);
-        close(new_sock);
-        free(g2_addr);
+        clear();
         exit(EXIT_FAILURE);
     }
     if (setsockopt(udp_sock, SOL_SOCKET, SO_REUSEADDR, &true, sizeof(int)) < 0) {
         perror("UDP setsockopt");
-        close(tcp_sock);
-        close(new_sock);
-        close(udp_sock);
-        free(g2_addr);
+        clear();
         exit(EXIT_FAILURE);
     }
 
     c2_addr = createIPv4Address(config.C2_ip, config.C2_port);
     if (!c2_addr) {
         perror("address");
-        close(tcp_sock);
-        close(new_sock);
-        close(udp_sock);
-        free(g2_addr);
+        clear();
         exit(EXIT_FAILURE);
     }
 
