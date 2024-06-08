@@ -24,7 +24,9 @@ void clear() {
 }
 
 int main() {
-    signal(SIGINT, handle_sigint);
+    struct sigaction action = { 0 };
+    action.sa_handler = &handle_sigint;
+    sigaction(SIGINT, &action, &old_action);
     OpenSSL_add_all_algorithms();
     ERR_load_crypto_strings();
 

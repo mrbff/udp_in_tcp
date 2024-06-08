@@ -17,7 +17,9 @@ void clear() {
 }
 
 int main() {
-    signal(SIGINT, handle_sigint);
+    struct sigaction action = { 0 };
+    action.sa_handler = &handle_sigint;
+    sigaction(SIGINT, &action, &old_action);
 
     char buffer[HMAC_SIZE + IV_SIZE + PACKET_MAX_LEN + AES_BLOCK_SIZE] = "";
     socklen_t addr_len = sizeof(struct sockaddr_in);
