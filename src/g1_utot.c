@@ -61,11 +61,6 @@ int main() {
         clear();
         exit(EXIT_FAILURE);
     }
-    if (setsockopt(tcp_sock, SOL_SOCKET, SO_REUSEADDR, &true, sizeof(int)) < 0) {
-        perror("TCP setsockopt");
-        clear();
-        exit(EXIT_FAILURE);
-    }
 
     g2_addr = createIPv4Address(config.G2_ip, config.G2_port);
     if (!g2_addr) {
@@ -81,21 +76,25 @@ int main() {
     }
 
     int recv_len = recvfrom(udp_sock, buffer, sizeof(buffer), 0, (struct sockaddr *)udp_addr, &addr_len);
+    if (recv_len == -1) handle_errors();
     if (recv_len > 0) {
-        send(tcp_sock, buffer, recv_len, 0);
+        if (send(tcp_sock, buffer, recv_len, 0) == -1)
+            handle_errors();
         puts("Client public key forwarded through tunnel");
     }
 
-    recv(tcp_sock, buffer, sizeof(buffer), 0);
+    if (recv(tcp_sock, buffer, sizeof(buffer), 0) == -1) handle_errors();
     if (recv_len > 0) {
-        sendto(udp_sock, buffer, sizeof(buffer), 0, (struct sockaddr *)udp_addr, sizeof(struct sockaddr_in));
+        if (sendto(udp_sock, buffer, sizeof(buffer), 0, (struct sockaddr *)udp_addr, sizeof(struct sockaddr_in)) == -1)
+            handle_errors();
         puts("Forwarding encrypted key to client\n");
     }
 
     while (1) {
         recv_len = recvfrom(udp_sock, buffer, sizeof(buffer), 0, (struct sockaddr *)udp_addr, &addr_len);
+        if (recv_len == -1) handle_errors();
         if (recv_len > 0) {
-            send(tcp_sock, buffer, recv_len, 0);
+            if (send(tcp_sock, buffer, recv_len, 0) == -1)  handle_errors();;
             printf("Forwarded packet of size %d from UDP to TCP\n", recv_len);
         }
     }

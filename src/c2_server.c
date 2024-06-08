@@ -27,6 +27,7 @@ int main() {
     struct sigaction action = { 0 };
     action.sa_handler = &handle_sigint;
     sigaction(SIGINT, &action, &old_action);
+    
     OpenSSL_add_all_algorithms();
     ERR_load_crypto_strings();
 
@@ -76,6 +77,7 @@ int main() {
     unsigned char client_pub_key[DER_LEN];
     puts("Waiting for client public key");
     int client_pub_key_len = recvfrom(sock, client_pub_key, sizeof(client_pub_key), 0, (struct sockaddr *)&client_addr, &addr_len);
+    if (client_pub_key_len == -1)   handle_errors();
     puts("Public key received from client");
     const unsigned char *p = client_pub_key;
     puts("Deserializing client public key");
@@ -87,7 +89,8 @@ int main() {
     puts("Symmetric key encrypted");
 
     puts("Sending encrypted key to client");
-    sendto(sock, encrypted_key, encrypted_len, 0, (struct sockaddr *)&client_addr, addr_len);
+    if (sendto(sock, encrypted_key, encrypted_len, 0, (struct sockaddr *)&client_addr, addr_len) == -1)
+        handle_errors();
     OPENSSL_free(encrypted_key);
     encrypted_key = NULL;
     EVP_PKEY_free(client_pkey);
@@ -98,6 +101,7 @@ int main() {
     int enc_packet_length = 0;
     while (1) {
         int recv_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &addr_len);
+        if (recv_len == -1) handle_errors();
         if (recv_len > 0) {
             memcpy(received_hmac, buffer, HMAC_SIZE);
             memcpy(iv, buffer + HMAC_SIZE, IV_SIZE);

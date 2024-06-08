@@ -31,6 +31,7 @@ int main() {
     struct sigaction action = { 0 };
     action.sa_handler = &handle_sigint;
     sigaction(SIGINT, &action, &old_action);
+    
     OpenSSL_add_all_algorithms();
     ERR_load_crypto_strings();
 
@@ -75,11 +76,13 @@ int main() {
     puts("Serializing public key");
     int pub_key_len = i2d_PUBKEY(rsa, &pub_key);
     puts("Sending public key to server");
-    sendto(sock, pub_key, pub_key_len, 0, (struct sockaddr *)g1_addr, sizeof(struct sockaddr_in));
+    if (sendto(sock, pub_key, pub_key_len, 0, (struct sockaddr *)g1_addr, sizeof(struct sockaddr_in)) == -1)
+        handle_errors();
 
     unsigned char encrypted_key[ENCRYPTED_KEY_SIZE];
     puts("Waiting for encryption key...");
-    recvfrom(sock, encrypted_key, ENCRYPTED_KEY_SIZE, 0, NULL, NULL);
+    if (recvfrom(sock, encrypted_key, ENCRYPTED_KEY_SIZE, 0, NULL, NULL) == -1)
+        handle_errors();
     puts("Received encryption key from server");
 
     symmetric_key = rsa_decrypt(rsa, encrypted_key, ENCRYPTED_KEY_SIZE);
@@ -97,7 +100,8 @@ int main() {
         memcpy(send_buffer + HMAC_SIZE, iv, IV_SIZE);
         memcpy(send_buffer + HMAC_SIZE + IV_SIZE, encrypted_packet, enc_packet_length);
 
-        sendto(sock, send_buffer, HMAC_SIZE + IV_SIZE + enc_packet_length, 0, (struct sockaddr *)g1_addr, sizeof(struct sockaddr_in));
+        if (sendto(sock, send_buffer, HMAC_SIZE + IV_SIZE + enc_packet_length, 0, (struct sockaddr *)g1_addr, sizeof(struct sockaddr_in)) == -1)
+            handle_errors();
         printf("Sent packet of length %d\n", packet_length);
         memset(packet, 0, sizeof(packet));
         memset(encrypted_packet, 0, sizeof(encrypted_packet));

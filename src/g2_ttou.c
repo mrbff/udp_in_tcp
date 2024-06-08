@@ -91,21 +91,26 @@ int main() {
     }
 
     int recv_len = recv(new_sock, buffer, sizeof(buffer), 0);
+    if (recv_len == -1) handle_errors();
     if (recv_len > 0) {
-        sendto(udp_sock, buffer, recv_len, 0, (struct sockaddr *)c2_addr, sizeof(struct sockaddr_in));
+        if (sendto(udp_sock, buffer, recv_len, 0, (struct sockaddr *)c2_addr, sizeof(struct sockaddr_in)) == -1)
+            handle_errors();
         puts("Client public key forwarded to server");
     }
 
     recv_len = recvfrom(udp_sock, buffer, sizeof(buffer), 0, NULL, NULL);
+    if (recv_len == -1) handle_errors();
     if (recv_len > 0) {
-        send(new_sock, buffer, sizeof(buffer), 0);
+        if (send(new_sock, buffer, sizeof(buffer), 0) == -1) handle_errors();
         puts("Forwarding encrypted key from server through tunnel\n");
     }
 
     while (1) {
         recv_len = recv(new_sock, buffer, sizeof(buffer), 0);
+        if (recv_len == -1) handle_errors();
         if (recv_len > 0) {
-            sendto(udp_sock, buffer, recv_len, 0, (struct sockaddr *)c2_addr, sizeof(struct sockaddr_in));
+            if (sendto(udp_sock, buffer, recv_len, 0, (struct sockaddr *)c2_addr, sizeof(struct sockaddr_in)) == -1)
+                handle_errors();
             printf("Forwarded packet of size %d from TCP to UDP\n", recv_len);
         }
     }
